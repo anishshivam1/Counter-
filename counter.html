@@ -280,6 +280,150 @@
 
     // Initialize display on load
     updateDisplay();
-  </script>
+  <script>
+  let count = parseInt(localStorage.getItem('jaap_count') || '0');
+  let malas = parseInt(localStorage.getItem('jaap_malas') || '0');
+  let currentDeityIndex = 0;
+  let voiceEnabled = true;
+
+  // Audio elements & state
+  const bgAudio = new Audio();
+  bgAudio.crossOrigin = "anonymous";
+  let isPlayingMusic = false;
+
+  const deities = [
+    { name: "Shri Radha-Krishna", mantra: "Shri Radha", meaning: "Divine love & spiritual bliss" },
+    { name: "Lord Shiva", mantra: "Om Namah Shivaya", meaning: "Adoration to the auspicious Lord Shiva" },
+    { name: "Lord Rama", mantra: "Jai Shree Ram", meaning: "Victory to Lord Rama, symbol of righteousness" },
+    { name: "Hanuman Ji", mantra: "Om Hanumate Namaha", meaning: "Salutations to the courageous Hanuman" }
+  ];
+
+  const synth = window.speechSynthesis;
+  let audioCtx = null;
+
+  function initAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function speakMantra(text) {
+    if (!voiceEnabled || !synth) return;
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'hi-IN';
+    utterance.rate = 1.2;
+    synth.speak(utterance);
+  }
+
+  function playBeep() {
+    initAudio();
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+  }
+
+  function handleTap() {
+    initAudio();
+    count++;
+    if (count % 108 === 0) {
+      malas++;
+      localStorage.setItem('jaap_malas', malas);
+    }
+    localStorage.setItem('jaap_count', count);
+    updateDisplay();
+
+    if (voiceEnabled) {
+      speakMantra(deities[currentDeityIndex].mantra);
+    } else {
+      playBeep();
+    }
+  }
+
+  function updateDisplay() {
+    document.getElementById('countDisplay').innerText = count;
+    const currentBeads = count % 108;
+    document.getElementById('malaDisplay').innerText = `Mala Completed: ${malas} (${currentBeads} / 108)`;
+  }
+
+  function toggleVoice() {
+    voiceEnabled = !voiceEnabled;
+    document.getElementById('voiceBtn').innerText = voiceEnabled ? "🔊" : "🔇";
+  }
+
+  function toggleTheme() {
+    const themes = ['saffron', 'indigo', 'green', 'light'];
+    const current = document.body.getAttribute('data-theme') || 'saffron';
+    const next = themes[(themes.indexOf(current) + 1) % themes.length];
+    document.body.setAttribute('data-theme', next);
+  }
+
+  // FIXED ONLINE MUSIC SEARCH & PLAYBACK ENGINE
+  async function searchMusic() {
+    initAudio();
+    const query = document.getElementById('musicQuery').value.trim();
+    if (!query) return;
+
+    document.getElementById('nowPlaying').innerText = "Searching...";
+
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`);
+      const data = await res.json();
+
+      if (data.results && data.results.length > 0) {
+        const track = data.results[0];
+        bgAudio.src = track.previewUrl;
+        document.getElementById('nowPlaying').innerText = `${track.trackName} - ${track.artistName}`;
+        
+        // Trigger play upon direct user gesture
+        bgAudio.play().then(() => {
+          isPlayingMusic = true;
+          document.getElementById('playPauseMusicBtn').innerText = "Pause";
+        }).catch(err => {
+          console.error("Autoplay blocked:", err);
+          document.getElementById('nowPlaying').innerText = "Tap Play to Start Audio";
+        });
+      } else {
+        document.getElementById('nowPlaying').innerText = "No devotional track found.";
+      }
+    } catch (e) {
+      console.error("Search error:", e);
+      document.getElementById('nowPlaying').innerText = "Error loading music stream.";
+    }
+  }
+
+  function toggleMusic() {
+    initAudio();
+    if (!bgAudio.src) {
+      document.getElementById('nowPlaying').innerText = "Search a song first!";
+      return;
+    }
+
+    if (isPlayingMusic) {
+      bgAudio.pause();
+      isPlayingMusic = false;
+      document.getElementById('playPauseMusicBtn').innerText = "Play";
+    } else {
+      bgAudio.play().then(() => {
+        isPlayingMusic = true;
+        document.getElementById('playPauseMusicBtn').innerText = "Pause";
+      });
+    }
+  }
+
+  updateDisplay();
+</script>
+  
 </body>
 </html>
